@@ -10,8 +10,11 @@ const server = http.createServer(app);
 // Initialize Socket.IO with the HTTP server
 const io = new Server(server, {
   cors: {
-    origin: process.env.NODE_ENV === "production" ? false : ["http://localhost:3000"],
-    methods: ["GET", "POST"]
+    origin:
+      process.env.NODE_ENV === "production"
+        ? false
+        : [import.meta.env.BACKEND_URL],
+    methods: ["GET", "POST"],
   },
 });
 
@@ -20,7 +23,7 @@ const rooms = new Map(); // roomId -> { participants: Map(socketId -> {email, st
 // Serve static files from React build in production
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../client/build")));
-  
+
   // Handle React routing, return all requests to React app
   app.get("*", (req, res) => {
     res.sendFile(path.join(__dirname, "../client/build/index.html"));

@@ -314,6 +314,7 @@ const RoomPage = () => {
 
   // Initialize media and peer connections
   useEffect(() => {
+    document.title = "Klio";
     const initializeMedia = async () => {
       try {
         const stream = await getUserMedia();

@@ -1,7 +1,7 @@
 {
-  "name": "video-conference-app",
+  "name": "klio-app",
   "version": "1.0.0",
-  "description": "Video conference application with React client and Socket.io server",
+  "description": "Video conference application with React client and Socket.io server and WebRTC!",
   "engines": {
     "node": "18.x",
     "npm": "9.x"

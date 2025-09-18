@@ -323,7 +323,7 @@ const RoomPage = () => {
 
         // Set up track handling for all participants
         participants.forEach((_, socketId) => {
-          peer.setupPeerConnectionListeners(
+          peer.createPeerConnection(
             socketId,
             (participantId, remoteStream) => {
               setParticipants((prev) => {

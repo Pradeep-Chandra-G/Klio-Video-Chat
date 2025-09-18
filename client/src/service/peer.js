@@ -4,7 +4,7 @@ class PeerService {
     this.localStream = null;
   }
 
-  createPeerConnection(socketId) {
+  createPeerConnection(socketId, onTrackReceived, onNegotiationNeeded) {
     const peer = new RTCPeerConnection({
       iceServers: [
         {
@@ -14,6 +14,28 @@ class PeerService {
           ],
         },
       ],
+    });
+
+    // 🔑 Handle remote stream
+    peer.addEventListener("track", (event) => {
+      if (onTrackReceived) {
+        onTrackReceived(socketId, event.streams[0]);
+      }
+    });
+
+    // 🔑 Handle negotiation needed
+    peer.addEventListener("negotiationneeded", () => {
+      if (onNegotiationNeeded) {
+        onNegotiationNeeded(socketId);
+      }
+    });
+
+    // 🔑 Debug ICE connection state
+    peer.addEventListener("iceconnectionstatechange", () => {
+      console.log(
+        `ICE connection state for ${socketId}:`,
+        peer.iceConnectionState
+      );
     });
 
     this.peers.set(socketId, peer);
@@ -28,12 +50,7 @@ class PeerService {
     const peer =
       this.getPeerConnection(socketId) || this.createPeerConnection(socketId);
 
-    // Add local stream tracks to peer connection
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        peer.addTrack(track, this.localStream);
-      });
-    }
+    this._addLocalTracks(peer);
 
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
@@ -46,12 +63,7 @@ class PeerService {
 
     await peer.setRemoteDescription(offer);
 
-    // Add local stream tracks to peer connection
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        peer.addTrack(track, this.localStream);
-      });
-    }
+    this._addLocalTracks(peer);
 
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
@@ -73,27 +85,16 @@ class PeerService {
     return this.localStream;
   }
 
-  setupPeerConnectionListeners(socketId, onTrackReceived, onNegotiationNeeded) {
-    const peer = this.getPeerConnection(socketId);
-    if (!peer) return;
+  // ✅ Internal helper: safely add local tracks (no duplicates)
+  _addLocalTracks(peer) {
+    if (!this.localStream) return;
 
-    peer.addEventListener("track", (event) => {
-      if (onTrackReceived) {
-        onTrackReceived(socketId, event.streams[0]);
+    const senders = peer.getSenders();
+    this.localStream.getTracks().forEach((track) => {
+      const alreadyAdded = senders.some((s) => s.track === track);
+      if (!alreadyAdded) {
+        peer.addTrack(track, this.localStream);
       }
-    });
-
-    peer.addEventListener("negotiationneeded", () => {
-      if (onNegotiationNeeded) {
-        onNegotiationNeeded(socketId);
-      }
-    });
-
-    peer.addEventListener("iceconnectionstatechange", () => {
-      console.log(
-        `ICE connection state for ${socketId}:`,
-        peer.iceConnectionState
-      );
     });
   }
 
@@ -106,7 +107,7 @@ class PeerService {
   }
 
   closeAllConnections() {
-    this.peers.forEach((peer, socketId) => {
+    this.peers.forEach((peer) => {
       peer.close();
     });
     this.peers.clear();

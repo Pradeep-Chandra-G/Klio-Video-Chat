@@ -13,7 +13,7 @@ const io = new Server(server, {
     origin:
       process.env.NODE_ENV === "production"
         ? false
-        : [import.meta.env.BACKEND_URL],
+        : [window.location.origin],
     methods: ["GET", "POST"],
   },
 });

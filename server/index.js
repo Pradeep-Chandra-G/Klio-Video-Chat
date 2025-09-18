@@ -1,10 +1,31 @@
 const { Server } = require("socket.io");
+const express = require("express");
+const path = require("path");
+const http = require("http");
 
-const io = new Server(8000, {
-  cors: true,
+// Create Express app and HTTP server
+const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.IO with the HTTP server
+const io = new Server(server, {
+  cors: {
+    origin: process.env.NODE_ENV === "production" ? false : ["http://localhost:3000"],
+    methods: ["GET", "POST"]
+  },
 });
 
 const rooms = new Map(); // roomId -> { participants: Map(socketId -> {email, stream}) }
+
+// Serve static files from React build in production
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../client/build")));
+  
+  // Handle React routing, return all requests to React app
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "../client/build/index.html"));
+  });
+}
 
 io.on("connection", (socket) => {
   console.log(`Socket Connected`, socket.id);
@@ -108,4 +129,9 @@ io.on("connection", (socket) => {
       }
     });
   });
+});
+
+const PORT = process.env.PORT || 8000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

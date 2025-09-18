@@ -49,7 +49,27 @@ const RoomPage = () => {
           )
       );
 
-      // Create offer for new participant
+      // Create peer connection for new participant with proper track handling
+      peer.createPeerConnection(
+        id,
+        (participantId, remoteStream) => {
+          console.log(`Received stream from ${participantId}`);
+          setParticipants((prev) => {
+            const newMap = new Map(prev);
+            const participant = newMap.get(participantId);
+            if (participant) {
+              newMap.set(participantId, {
+                ...participant,
+                stream: remoteStream,
+              });
+            }
+            return newMap;
+          });
+        },
+        handleNegoNeeded
+      );
+
+      // Create offer for new participant if we have stream
       if (myStream) {
         try {
           const offer = await peer.createOffer(id);
@@ -68,12 +88,27 @@ const RoomPage = () => {
       console.log(`Incoming call from ${from}`);
 
       try {
-        // Get user media if not already available
-        if (!myStream) {
-          const stream = await getUserMedia();
-          setMyStream(stream);
-          peer.setLocalStream(stream);
-        }
+        // Create peer connection for caller with proper track handling
+        peer.createPeerConnection(
+          from,
+          (participantId, remoteStream) => {
+            console.log(
+              `Received stream from ${participantId} via incoming call`
+            );
+            setParticipants((prev) => {
+              const newMap = new Map(prev);
+              const participant = newMap.get(participantId);
+              if (participant) {
+                newMap.set(participantId, {
+                  ...participant,
+                  stream: remoteStream,
+                });
+              }
+              return newMap;
+            });
+          },
+          handleNegoNeeded
+        );
 
         const answer = await peer.createAnswer(from, offer);
         socket.emit("call:accepted", { to: from, ans: answer });
@@ -81,7 +116,7 @@ const RoomPage = () => {
         console.error("Error handling incoming call:", error);
       }
     },
-    [socket, myStream]
+    [socket]
   );
 
   // Handle call accepted
@@ -109,6 +144,54 @@ const RoomPage = () => {
     // Close peer connection
     peer.closePeerConnection(id);
   }, []);
+
+  // Handle room join response - Initialize existing participants
+  const handleRoomJoinResponse = useCallback(
+    ({ room, participants: existingParticipants }) => {
+      console.log(
+        `Joined room ${room}, existing participants:`,
+        existingParticipants
+      );
+
+      // Add all existing participants to state and create peer connections
+      existingParticipants.forEach((participant) => {
+        setParticipants(
+          (prev) =>
+            new Map(
+              prev.set(participant.id, {
+                email: participant.email,
+                stream: null,
+                isAudioOn: true,
+                isVideoOn: true,
+              })
+            )
+        );
+
+        // Create peer connection for existing participant
+        peer.createPeerConnection(
+          participant.id,
+          (participantId, remoteStream) => {
+            console.log(
+              `Received stream from existing participant ${participantId}`
+            );
+            setParticipants((prev) => {
+              const newMap = new Map(prev);
+              const existingParticipant = newMap.get(participantId);
+              if (existingParticipant) {
+                newMap.set(participantId, {
+                  ...existingParticipant,
+                  stream: remoteStream,
+                });
+              }
+              return newMap;
+            });
+          },
+          handleNegoNeeded
+        );
+      });
+    },
+    []
+  );
 
   // Handle participant media toggles
   const handleParticipantAudioToggle = useCallback(
@@ -312,35 +395,16 @@ const RoomPage = () => {
     });
   }, [roomId]);
 
-  // Initialize media and peer connections
+  // Initialize media and setup
   useEffect(() => {
     document.title = "Klio";
+
     const initializeMedia = async () => {
       try {
         const stream = await getUserMedia();
         setMyStream(stream);
         peer.setLocalStream(stream);
-
-        // Set up track handling for all participants
-        participants.forEach((_, socketId) => {
-          peer.createPeerConnection(
-            socketId,
-            (participantId, remoteStream) => {
-              setParticipants((prev) => {
-                const newMap = new Map(prev);
-                const participant = newMap.get(participantId);
-                if (participant) {
-                  newMap.set(participantId, {
-                    ...participant,
-                    stream: remoteStream,
-                  });
-                }
-                return newMap;
-              });
-            },
-            handleNegoNeeded
-          );
-        });
+        console.log("Local stream initialized");
       } catch (error) {
         console.error("Failed to initialize media:", error);
       }
@@ -365,6 +429,7 @@ const RoomPage = () => {
   useEffect(() => {
     socket.on("user:joined", handleUserJoined);
     socket.on("user:left", handleUserLeft);
+    socket.on("room:join", handleRoomJoinResponse);
     socket.on("incoming:call", handleIncomingCall);
     socket.on("call:accepted", handleCallAccepted);
     socket.on("peer:nego:needed", handleNegoNeedIncoming);
@@ -375,6 +440,7 @@ const RoomPage = () => {
     return () => {
       socket.off("user:joined", handleUserJoined);
       socket.off("user:left", handleUserLeft);
+      socket.off("room:join", handleRoomJoinResponse);
       socket.off("incoming:call", handleIncomingCall);
       socket.off("call:accepted", handleCallAccepted);
       socket.off("peer:nego:needed", handleNegoNeedIncoming);
@@ -386,6 +452,7 @@ const RoomPage = () => {
     socket,
     handleUserJoined,
     handleUserLeft,
+    handleRoomJoinResponse,
     handleIncomingCall,
     handleCallAccepted,
     handleNegoNeedIncoming,

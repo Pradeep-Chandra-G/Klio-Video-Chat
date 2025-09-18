@@ -1,4 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { useSocket } from "../context/SocketProvider";
+import { useNavigate } from "react-router-dom";
+
 import {
   Users,
   Video,
@@ -9,18 +12,21 @@ import {
 } from "lucide-react";
 
 const LobbyScreen = () => {
+  const socket = useSocket();
+  const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [room, setRoom] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   // Mock socket and navigate for demo
-  const socket = {
-    emit: (event, data) => console.log("Socket emit:", event, data),
-    on: () => {},
-    off: () => {},
-  };
-  const navigate = (path) => console.log("Navigate to:", path);
+  //   const socket = {
+  //     emit: (event, data) => console.log("Socket emit:", event, data),
+  //     on: () => {},
+  //     off: () => {},
+  //   };
+  //   const navigate = (path) => console.log("Navigate to:", path);
 
   const handleSubmitForm = useCallback(
     (e) => {
